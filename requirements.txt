@@ -1,0 +1,6 @@
+
+asyncclick>=7.0.9
+python-digitalocean>=1.15.0
+asyncio>=3.4.3
+uvloop>=0.14.0
+aiohttp>=3.6.2
