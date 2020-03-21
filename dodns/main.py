@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import os
 import traceback
-import uvloop
 
 from aiohttp.client import ClientSession
 from concurrent.futures import ThreadPoolExecutor
@@ -11,14 +11,11 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncclick as click
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 from digitalocean import Manager
 
 from dodns.external_ip import IPChecker, PROVIDERS
-
-
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 @dataclass(frozen=True)
@@ -79,9 +76,16 @@ async def in_thread(executor, func, *args):
 @click.option(
     '-r',
     '--record',
-    'raw_records',
+    'records',
     multiple=True,
+    required=True,
     help='Digital Ocean domain record to update'
+)
+@click.option(
+    '-a',
+    '--access-token',
+    required=True,
+    help='Digital Ocean Access Token'
 )
 @click.option(
     '-t',
@@ -91,20 +95,26 @@ async def in_thread(executor, func, *args):
     show_default=True,
     help='Record time to live in seconds. Minimum 30.'
 )
-async def main(raw_records: List[str], ttl=30):
-    records = [Record(r, ttl=ttl) for r in raw_records]
+async def main(records: Union[str, List[str]], access_token: str, ttl: int = 3600):
+    """
+    Dynamic DNS tool for Digital Ocean
+    """
+    os.environ['DIGITALOCEAN_ACCESS_TOKEN'] = access_token
+    if isinstance(records, str):
+        records = records.replace(' ', '').split(',')
+    record_objects = [Record(r, ttl=ttl) for r in records]
     async with ClientSession() as session:
         with ThreadPoolExecutor(max_workers=2) as executor:
             ip_checker = IPChecker(session, PROVIDERS)
             while True:
                 try:
                     ip = await ip_checker.get()
-                    await in_thread(executor, update_records, records, ip)
-                    await asyncio.sleep(30)
+                    await in_thread(executor, update_records, record_objects, ip)
+                    await asyncio.sleep(ttl)
                 except Exception:
                     traceback.print_exc()
                     continue
 
 
 if __name__ == '__main__':
-    main(_anyio_backend='asyncio')
+    main(_anyio_backend='asyncio', auto_envvar_prefix='DODNS')
