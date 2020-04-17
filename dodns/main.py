@@ -60,7 +60,7 @@ def update_records(records: List[Record], ipv4: str):
         do_record = do_records_filtered[0]
         if do_record.data == ipv4 and do_record.ttl == record.ttl:
             click.echo(f'Record {record.name!r} is up to date. Skipping update.')
-            return
+            continue
         do_record.data = ipv4
         do_record.ttl = record.ttl
         do_record.save()
@@ -100,9 +100,11 @@ async def main(records: Union[str, List[str]], access_token: str, ttl: int = 360
     Dynamic DNS tool for Digital Ocean
     """
     os.environ['DIGITALOCEAN_ACCESS_TOKEN'] = access_token
-    if isinstance(records, str):
-        records = records.replace(' ', '').split(',')
-    record_objects = [Record(r, ttl=ttl) for r in records]
+    parsed_records = []
+    if isinstance(records, tuple):
+        for raw in records:
+            parsed_records += [r for r in raw.replace(' ', '').split(',') if r]
+    record_objects = [Record(r, ttl=ttl) for r in parsed_records]
     async with ClientSession() as session:
         with ThreadPoolExecutor(max_workers=2) as executor:
             ip_checker = IPChecker(session, PROVIDERS)
